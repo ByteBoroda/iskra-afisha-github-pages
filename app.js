@@ -103,19 +103,20 @@ function navItems(active) {
     ['afisha', 'compass', 'Афиша'],
     ['izbrannoe', 'heart', 'Избранное'],
     ['bilety', 'ticket', 'Мои билеты'],
+    ['zapusk', 'grid', 'Запуск'],
   ].map(([view, symbol, name]) => `<a class="nav-item" href="${routeLink(view)}" ${view === active ? 'aria-current="page"' : ''}>${icon(symbol)}<span>${name}</span>${view === 'bilety' && data.orders.length ? `<span class="nav-count">${data.orders.length}</span>` : ''}</a>`).join('');
 }
 
 function renderChrome(view) {
-  const active = view === 'izbrannoe' ? view : ['bilety', 'bilet', 'gotovo'].includes(view) ? 'bilety' : 'afisha';
+  const active = ['izbrannoe', 'zapusk'].includes(view) ? view : ['bilety', 'bilet', 'gotovo'].includes(view) ? 'bilety' : 'afisha';
   $('#topbar').innerHTML = `<div class="wrap topbar-inner">
-    <a class="brand" href="#/afisha" aria-label="Искра Банк — афиша"><img src="${asset('iskra.svg')}" alt=""><b>Искра <small>Банк</small></b></a>
+    <a class="brand" href="#/afisha" aria-label="Искра Банк - афиша"><img src="${asset('iskra.svg')}" alt=""><b>Искра <small>Банк</small></b></a>
     <nav class="desktop-nav" aria-label="Основная навигация">${navItems(active)}</nav>
     <span class="location">${icon('pin')} Москва</span>
   </div>`;
   $('#bottom-nav').innerHTML = navItems(active);
   $('#footer').innerHTML = `<span class="footer-name"><img src="${asset('iskra.svg')}" alt=""> Искра Банк · Афиша</span>
-    <span>Демо · События ноября 2026 · Оплата и билеты условные</span>`;
+    <span>Демо · События ноября 2026 · Оплата и билеты для теста</span>`;
 }
 
 function favoriteButton(event) {
@@ -173,20 +174,39 @@ function empty(symbol, title, description, action = '') {
 }
 
 function hero() {
-  const event = eventBy(editorial[state.slide]);
-  return `<div class="hero-stage" aria-hidden="true"><img src="${asset(event.hero || event.image)}" alt="" fetchpriority="high"></div>
-    <div class="hero-content">
-      <div class="hero-label">${icon('spark')} Выбор редакции</div>
-      <h2>${esc(event.name)}</h2>
-      <p>${dateTime(event.times[0])} · ${esc(event.venue)}</p>
-      <a class="btn hero-cta" href="${routeLink('sobytie', event.id)}">О событии ${icon('arrow')}</a>
-    </div>
-    <div class="hero-controls">
-      <button class="hero-control" type="button" data-slide="-1" aria-label="Предыдущее событие">${icon('left')}</button>
-      <span class="hero-count" aria-live="polite">${state.slide + 1} / ${editorial.length}</span>
-      <button class="hero-control" type="button" data-slide="1" aria-label="Следующее событие">${icon('right')}</button>
+  const slides = editorial.map((id, index) => {
+    const event = eventBy(id);
+    return `<article class="hero-slide" aria-label="${index + 1} из ${editorial.length}">
+      <div class="hero-stage" aria-hidden="true"><img src="${asset(event.hero || event.image)}" alt="" ${index === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}></div>
+      <div class="hero-content">
+        <div class="hero-label">${icon('spark')} Выбор редакции</div>
+        <h2>${esc(event.name)}</h2>
+        <p>${dateTime(event.times[0])} · ${esc(event.venue)}</p>
+        <a class="btn hero-cta" href="${routeLink('sobytie', event.id)}" aria-label="О событии: ${esc(event.name)}">О событии ${icon('arrow')}</a>
+      </div>
+    </article>`;
+  });
+  return `<div class="hero-track" id="hero-track">${slides.join('')}</div>
+    <div class="hero-pagination" role="group" aria-label="События в подборке">
+      ${editorial.map((id, index) => `<button type="button" class="hero-dot" data-slide="${index}" aria-label="Событие ${index + 1}: ${esc(eventBy(id).name)}" aria-pressed="${state.slide === index}"></button>`).join('')}
     </div>`;
 }
+
+function scrollFeatured(index, behavior = 'instant') {
+  const track = $('#hero-track');
+  if (track?.clientWidth) track.scrollTo({left: track.clientWidth * index, behavior});
+}
+
+page.addEventListener('scroll', event => {
+  const track = event.target;
+  if (track.id !== 'hero-track' || !track.clientWidth) return;
+  const active = Math.min(editorial.length - 1, Math.max(0, Math.round(track.scrollLeft / track.clientWidth)));
+  if (active === state.slide) return;
+  state.slide = active;
+  $('#hero').querySelectorAll('[data-slide]').forEach(dot => {
+    dot.setAttribute('aria-pressed', String(Number(dot.dataset.slide) === active));
+  });
+}, {capture: true, passive: true});
 
 function inPeriod(time) {
   const period = periods.find(item => item.id === state.period);
@@ -205,7 +225,7 @@ function catalogContent() {
       `<button class="text-link" type="button" data-collection="weekend">Все на выходных ${icon('arrow')}</button>`)
       + section('Скоро в городе', '13–15 ноября', coming.map(eventBy),
         `<button class="text-link" type="button" data-collection="all">Вся афиша ${icon('arrow')}</button>`)
-      + `<aside class="collection-banner"><div><span class="banner-icon">${icon('star')}</span><div><h3>Выходные всей семьёй</h3><p>Детские спектакли в Москве</p></div></div><button class="text-link" type="button" data-collection="family">Смотреть подборку ${icon('arrow')}</button></aside>`;
+      + `<aside class="collection-banner"><div><span class="banner-icon">${icon('star')}</span><div><h3>Выходные всей семьей</h3><p>Детские спектакли в Москве</p></div></div><button class="text-link" type="button" data-collection="family">Смотреть подборку ${icon('arrow')}</button></aside>`;
   }
   const results = events.filter(event => (state.category === 'all' || event.category === state.category)
       && event.times.some(inPeriod)
@@ -223,6 +243,7 @@ function updateCatalog() {
   if (!el) return;
   el.innerHTML = catalogContent();
   el.closest('.catalog-view').classList.toggle('catalog-filtered', hasCatalogFilters());
+  scrollFeatured(state.slide);
   $('#search-clear').hidden = !state.query;
   document.querySelectorAll('[data-category]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.category === state.category)));
   const date = $('#date-filter');
@@ -293,7 +314,7 @@ function renderEvent(event) {
 }
 
 function favoritesEmpty() {
-  return empty('heart', 'Пока ничего не сохранили', 'Нажмите на сердечко в карточке события, чтобы вернуться к нему позже.', actionLink('Смотреть афишу', routeLink('afisha')));
+  return empty('heart', 'В избранном пока пусто', 'Нажмите на сердечко в карточке, чтобы сохранить событие.', actionLink('Смотреть афишу', routeLink('afisha')));
 }
 
 function renderFavorites() {
@@ -349,7 +370,7 @@ function seatPicker(event, cart) {
     return `<div class="seat-row" role="group" aria-label="Ряд ${row}"><span class="row-label" aria-hidden="true">${row}</span>${buttons}</div>`;
   }).join('');
   return `<h2>${event.layout === 'seats' && event.category === 'sport' ? 'Сектор А' : 'Схема зала'}</h2><p>Можно выбрать до 6 мест.</p>
-    <p class="seat-hint">Прокрутите схему вбок, чтобы увидеть все места.</p>
+    <p class="seat-hint">Листайте схему влево или вправо, чтобы увидеть все места.</p>
     <div class="stage">${event.front}</div>
     <div class="seat-scroll" role="region" aria-label="Схема зала" tabindex="0">
       <div class="seats" aria-label="Места в зале">${layout}</div>
@@ -425,7 +446,7 @@ function renderCheckout(event, cart) {
         <div class="purchase-actions">
           <button class="btn btn-primary btn-block" type="button" data-pay ${state.paying ? 'disabled aria-busy="true"' : ''}>${state.paying ? '<span class="spinner" aria-hidden="true"></span> Подтверждаем оплату' : `Оплатить ${money(total)}`}</button>
         </div>
-        <div class="demo-note">${icon('info')}<span>Демо-режим. Деньги и почта используются только в симуляции.</span></div>
+        <div class="demo-note">${icon('info')}<span>В демо деньги не списываются, письма не отправляются.</span></div>
       </section>
     </div>
   </div>`;
@@ -436,7 +457,7 @@ function renderConfirmation(order) {
   return `<section class="panel confirmation enter">
     <div class="success-icon">${icon('check')}</div>
     <h1>Оплата прошла успешно</h1>
-    <p>Билеты отправлены на вашу почту.</p>
+    <p>Демо-билет сохранен в разделе «Мои билеты».</p>
     ${orderPreview(event, order.time, quantityOf(order.lines))}
     <div class="actions">
       ${actionLink('Мои билеты', routeLink('bilety'))}
@@ -519,13 +540,16 @@ function render(focus = true) {
     bilety: ['Мои билеты', renderTickets],
     bilet: order && ['Билет', () => renderTicket(order)],
     izbrannoe: ['Избранное', renderFavorites],
+    zapusk: ['Запуск афиши', () => renderLaunch(id)],
   };
   const selected = Object.hasOwn(views, view) && views[view];
   const [title, template] = selected || ['Страница не найдена', () => empty('compass', 'Страница не найдена', 'Откройте афишу, чтобы выбрать событие.', actionLink('Вернуться в афишу', routeLink('afisha')))];
-  document.title = `${title} — Искра Банк`;
+  document.title = `${title} - Искра Банк`;
   renderChrome(view);
   document.body.classList.toggle('booking-flow', !!selected && ['mesta', 'oplata'].includes(view));
   page.innerHTML = template();
+  if (view === 'afisha') scrollFeatured(state.slide);
+  if (view === 'zapusk') updateLaunchCalculator();
   window.scrollTo({top: 0, behavior: 'instant'});
   if (focus) page.focus({preventScroll: true});
 }
@@ -564,7 +588,7 @@ function pay(event, cart, button) {
     if (event.layout === 'seats' && lines.some(line => taken.has(line.code))) {
       cart.seats = cart.seats.filter(seat => !taken.has(seatCode(seat.row, seat.seat)));
       if (currentRoute().view === 'oplata' && currentRoute().id === event.id) go('mesta', event.id);
-      flash('Эти места уже выбраны. Проверьте заказ.');
+      flash('Эти места уже заняты. Выберите другие.');
       return;
     }
     const id = `IK-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
@@ -578,7 +602,7 @@ function pay(event, cart, button) {
     } else {
       renderChrome(route.view);
     }
-    if (!persisted) flash('Билет доступен до закрытия страницы');
+    if (!persisted) flash('Скачайте билет, пока страница открыта');
   }, 560);
 }
 
@@ -599,11 +623,7 @@ document.addEventListener('click', click => {
     return;
   }
   if (attrs.favorite) changeFavorite(attrs.favorite);
-  if (attrs.slide) {
-    state.slide = (state.slide + Number(attrs.slide) + editorial.length) % editorial.length;
-    $('#hero').innerHTML = hero();
-    $(`[data-slide="${attrs.slide}"]`).focus({preventScroll: true});
-  }
+  if ('slide' in attrs) scrollFeatured(Number(attrs.slide), requestMotion() ? 'smooth' : 'instant');
   if (attrs.category) {
     state.category = attrs.category;
     state.catalog = attrs.category !== 'all';
